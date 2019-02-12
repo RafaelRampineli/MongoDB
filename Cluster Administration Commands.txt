@@ -1,0 +1,1363 @@
+##########################################################################################################################################################################
+														MongoDB - Cluster Administration  - Week 1
+##########################################################################################################################################################################
+
+#### Utilizar Vagrant no Windows que irá instanciar uma maquina Linux do Mongo
+
+cd university/m103/m103-vagrant-env/
+vagrant ssh
+############################################################################################################ 
+										Enviroment Configuration
+############################################################################################################
+
+							# Instalar e configurar o GitBash caso não exista #
+
+vagrant up
+vagrant provision
+vagran ssh 
+
+Login da VM
+user: rafael
+pwd: 1
+
+# Instalar virtualbox e vagrant
+sudo apt-get install virtualbox
+sudo apt-get install vagrant
+
+# Fazer o Download dos arquivos no site da mongoUniversity
+
+# Criar um diretório caso não exista
+mkdir -p [diretório] (~/university/)
+
+# Copia um diretório inteiro para outro diretório (obs.: Deve-se estar dentro do diretório que deseja copiar ou colocar o caminho completo)
+cp -r m103-vagrant-env/ ~/university/m103/
+
+# cat command (ex: cat Vagrantfile)
+Lê dados do arquivo e apresenta seu conteudo.
+
+# Subir ambiente Vagrant
+Antes de subir o vagrant, deve altera o numero de CPU para 1.  Essa alteração deve ser realizada dentro do Vagrantfile. (Necessário quando realiza uma virtualização dentro de outra VM)
+Após a alteração rodar vagrant halt e em seguida vagrant up.
+
+- Diretório onde o vagrant up deve ser executado (Local onde foi copiado o arquivo dos downloads)
+
+cd home/rafael/university/m103/m103-vagrant-env/
+
+vagrant up
+
+# provisionar Vagrant
+
+vagrant provision
+
+# conectar via ssh
+
+vagrant ssh
+
+############################################################################################################ 
+										Instanciando MongoDB
+############################################################################################################
+CMD> mongod -> para subir o mongo
+abrir outro terminal e conectar ao mongo:CMD> mongo
+
+#Mostrar todos dbs atuais no mongo
+
+show dbs 
+
+#Derrubar o db Admin
+
+use admin
+
+db.shutdownServer()
+
+# Command Line Options
+
+--port = A porta que o mongo irá utlizar
+--dbpath = Local para armazenar os files.
+--logpath = local para armazenar o logfile de informações do mongo.
+--fork = instanciar o mongod sem travar a sessão, permite conectar no mongo utilizando a mesma sessão
+
+mkdir first_mongod (Criar o path onde o mongo será iniciado)
+mongod --port 30000 --dbpath first_mongd --logpath first_mongod.log --fork
+mongo --port 30000 (to conect at mongod instanciado na porta)
+
+# Sharded clusters are composed of: MongoS, Replica Sets and Config Servers.
+
+# Configuration Files
+/etc/mongod.conf
+
+substitui o command line passando todos os parametros
+na hora da conexão utilizar o cmd abaixo que irá fazer a leitura das configurações dentro do Configuration File.
+
+mongod --config "/etc/mongod.conf" ou
+mongod -f "/etc/mongod.conf"
+
+# Adicionar usuario com permissão
+mongo admin --host localhost:27000 --eval '
+  db.createUser({
+    user: "m103-admin",
+    pwd: "m103-pass",
+    roles: [
+      {role: "root", db: "admin"}
+    ]
+  
+'
+
+# Instancia o MongoD com configurações definidas no command line
+
+mongod --dbpath /data/db --port 27000 --bind_ip "127.0.0.1,192.168.103.100" --logpath /data/db/mongod.l
+og --fork
+
+# List directories:
+
+List --dbpath directory: ls -l /data/db
+List diagnostics data directory: ls -l /data/db/diagnostic.data
+List journal directory: ls -l /data/db/journal
+List socket file: ls /tmp/mongodb-27017.sock
+
+# Mudar o proprietario da pasta
+sudo chown vagrant:vagrant /var/mongodb/db/
+
+# Verificar se o mongo está rodando e dar um kill
+Grep MongoD
+
+ps -ef | grep mongod
+kill<pid>
+
+# User management commands:
+
+db.createUser()
+db.dropUser()
+
+# Collection management commands:
+
+db.<collection>.renameCollection()
+db.<collection>.createIndex()
+db.<collection>.drop()
+
+# Database management commands:
+
+db.dropDatabase()
+db.createCollection()
+
+# Database status command:
+
+db.serverStatus()
+
+# Creating index with Database Command:
+
+db.runCommand(
+  { "createIndexes": <collection> },
+  { "indexes": [
+    {
+      "key": { "product": 1 }
+    },
+    { "name": "name_index" }
+    ]
+  }
+)
+
+# Creating index with Shell Helper:
+
+db.<collection>.createIndex(
+  { "product": 1 },
+  { "name": "name_index" }
+)
+
+# Introspect a Shell Helper:
+
+db.<collection>.createIndex
+
+############################################################################################################
+											Logging Basics											
+############################################################################################################
+
+## Logar com usuario que possui permissoes : 
+mongo admin --host 192.168.103.100:27000 -u m103-admin -p m103-pass
+
+# Analisando logs
+db.adminCommand({"getLog": "global"})  {de dentro do mongo}
+tail -f /var/log/mongodb/mongod.log    {pelo commando line}
+
+# Alterando o nivel de captura de logs para 0 {0= Não pega logs}
+db.setLogLevel( 0, "index")
+
+# Check o nivel de Log/detalhamento  - Verbose
+db.getLogComponents()
+
+#Updating a document:
+db.products.update( { "sku" : 6902667 }, { $set : { "salePrice" : 39.99} } )
+
+#Look for instructions in the log file with grep:
+grep -R 'update' /data/db/mongod.log
+
+############################################################################################################ 
+										Profiling the Database
+############################################################################################################
+
+# Events Captured by profiler: 
+								CRUD
+								Adminsitrative operations 
+								Configuration operations (cluster operations are included)
+
+# Recupera o nivel de profilling atualmente no db.  {0: Off, 1: Slowly than 100ms, 2: all things profiling}
+use newDB
+db.getProfilingLevel()
+
+# Altera o log profile para 1.  Ao ativar o Profile <> 1, é criado uma collection chamada system.profile que irá registrar o monitoramento.
+
+db.setProfilingLevel(1)
+db.system.profile.find().pretty() 
+
+# Configura o tempo Slowns = 0 no profiler. (irá pegar qualquer execução) {Se a instancia fo reiniciada perde a configuração, para deixar FIXO, deve-se alterar dentro do mongod.conf}
+db.setProfilingLevel( 1, { slowms: 0 } )
+
+# Insere um registro em uma nova collection para test do profile.
+db.new_collection.insert( {"a" : 1} )
+db.system.profile.find().pretty()
+
+# Mostra as collections do db
+db.getCollectionNames()
+
+# Configurar profile queries longer than 50ms in /etc/mongod.conf
+operationProfiling:
+  slowOpThresholdMs: 50
+
+############################################################################################################ 
+										Basic MongoDB Security
+############################################################################################################
+  
+1. Step: Autenticação
+2. Step: Autorização  
+  
+# tipos de autenticação
+
+SCRAM = Default, pede alguma resposta para autenticação.
+X.509 = utiliza o certificado X.509 para autenticação
+
+LDPA =  (Only Enterprise Version)
+KERBEROS = (Only Enterprise Version)
+
+# Autorização.  Role based acess control (Deve-se sempre criar nivel de security mesmo em ambiente DEV)
+
+Roles: 
+
+Database Administrator: Create User / Create Index
+Developer: Write Data / Read Data
+Data Scientist: Read Data
+
+Print configuration file: cat /etc/mongod.conf
+
+Launch standalone mongod: mongod -f /etc/mongod.conf
+
+Connect to mongod: mongo --host 127.0.0.1:27000  {informar a porta que está configurado dentro do mongod.conf que iniciou o serviço acima}
+
+Obs.: Se já tiver sido criado um usuário anteriormente, deve-se logar com esse usuário ADM para criar o usuario abaixo.
+Só é permitido criar 1 usuário utilizando autenticação LocalHost, após criar esse usuário, os acessos via user LocalHost(Default, sem informar user/pwd) são negados.
+
+Create new user with the root role (also, named root):
+
+use admin
+db.createUser({
+  user: "root",
+  pwd: "root123",
+  roles : [ "root" ]
+})
+
+Connect to mongod and authenticate as root: mongo --username root --password root123 --authenticationDatabase admin
+
+Run DB stats:
+
+db.stats()
+Shutdown the server:
+
+use admin
+db.shutdownServer()
+
+** You should always deploy MongoDB with security enabled, regardless of the environment. **
+
+############################################################################################################ 
+										Built-in Roles
+						{How Role Based Access Control (RBAC} works
+############################################################################################################
+
+# Built-in Roles:
+
+Database Level by User
+
+Database User: Read/ReadWrite
+Database Administration: dbAdmin/userAdmin/dbOwner
+Cluster Administration: ClusterAdmin/clusterManager/clusterMonitor/hostManager
+Backup/Restore: Backup/Restore
+Super User: root
+
+All Database
+
+Database User: ReadAnyDatabase/ReadWriteAnyDatabase
+Database Administration: dbAdminAnyDatabase/userAdminAnyDatabase
+Super User: root
+
+Resources
+
+# Specific database and collection
+{ db: "products", collection: "inventory"}
+
+# All databases and all collections
+{ db: "", collection: ""}
+
+# Any database and specific collection
+{ db: "", collection: "accounts"}
+
+# Specific database and any collection
+{ db: "products", collection: ""}
+
+# Cluster Resource
+{Cluster: true}
+
+# Cria um novo usuário com utilizando a role: userAdmin no db: Admin
+
+db.createUser(
+  { user: "security_officer",
+    pwd: "h3ll0th3r3",
+    roles: [ { db: "admin", role: "userAdmin" } ]
+  }
+)
+
+db.createUser(
+  { user: "dba",
+    pwd: "c1lynd3rs",
+    roles: [ { db: "admin", role: "dbAdmin" } ]
+  }
+)
+
+# Grant permissão ao usuário dba no db: playground a permissao de role: dbOwner
+
+db.grantRolesToUser("dba", [ { db: "playground", role: "dbOwner" } ] )
+
+# Exibe as permissões que uma Role dá sobre o db
+
+db.runCommand( { rolesInfo: { role: "dbOwner", db: "playground" }, showPrivileges: true} )
+
+# Cria um usuário com permissão de ReadWrite no db ApplicationData
+
+db.createUser({user: "m103-application-user", pwd: "m103-application-pass", roles: [{ db: "applicationData", role: "readWrite"}] })
+
+############################################################################################################ 
+										Server Tools Overview
+############################################################################################################
+
+# Listar todos Binários do mongodb
+
+find /usr/bin/ -name "mongo*"
+
+# Cria um novo diretório e roda o mongod nesse novo diretório
+
+mkdir -p ~/first_mongod
+mongod --port 30000 --dbpath ~/first_mongod --logpath ~/first_mongod/mongodb.log --fork
+
+
+# Statisticas dos processos mongoD ou mongoS que estão rodando
+
+mongostat --help
+mongostat --port <especifica a porta>
+
+# Realizar um Dump dos dados da collection 
+
+mongodump --port 27000 --db applicationData --collection music_albums -u root -p root123 --authenticationDatabase admin
+
+Listar os registros no diretório: ls dump/applicationData/
+cat dump/applicationData/music_albums.metadata.json
+
+# Restaurar uma collection a partir de um BJON dump 
+ 
+mongorestore --drop --port 27000 -u root -p root123 --authenticationDatabase admin dump/  {--drop: Dropa a collection atual e faz o restore do Dump}
+
+# Exportar collection para JSON ou CSV
+# Irá printar todos registros na tela.
+
+mongoexport --port 27000 --db applicationData --collection music_albums
+
+# Exporta todos os dados da collection music_albums para o arquivo music_albums.json
+
+mongoexport --port 27000 --db applicationData --collection music_albums -o music_albums.json
+
+# Mostrar os dados exportados
+
+tail music_albums.json
+
+# Importar dados de um Json
+
+mongoimport --port 27000 music_albums.json
+
+# Import informando o db, collection a ser importada, diretório e usuário de autenticação
+
+mongoimport --port 27000 --db applicationData --collection products -u m103-application-user -p m103-application-pass --authenticationDatabase admin /dataset/products.json
+
+
+##########################################################################################################################################################################
+														MongoDB - Cluster Administration  - Week 2 {Replication}
+##########################################################################################################################################################################
+
+############################################################################################################ 
+										Setting Up a Replica Set
+############################################################################################################
+
+# Criar novos diretórios para dbPath e SystemLog para os novos nodes 
+
+{
+ ATENÇÃO A PERMISSÃO DOS DIRETÓRIOS:
+ Dar permissão Full em diretórios: sudo chmod 777 /var/mongodb/db/ -R
+}
+
+mkdir -p /var/mongodb/db/node1
+mkdir -p /var/mongodb/db/node2
+mkdir -p /var/mongodb/db/node3
+
+- Cria uma cópia do arquivo /etc/mongod.conf para o node1.conf efazer todas as configurações necessárias no node1.conf e depois copiar para os outros nodes
+
+cp /etc/mongod.conf /etc/node1.conf
+
+cp /etc/node1.conf /etc/node2.conf
+cp /etc/node1.conf /etc/node3.conf
+
+# Deve-se gerar uma KeyFile que será utilizada para autenticação e comunicação entre os Nodes do ReplicaSet 
+{Obs.: KeyFiles NÃO devem ser usados em ambiente Produção. Existem formas mais seguras como: x.509 ou SCRAM (Default)}
+
+- Criar o diretório onde a KeyFile será gerada
+
+mkdir /var/mongodb/pki/
+
+- Gerar a KeyFile dentro do diretório criado
+
+sudo chown vagrant:vagrant
+
+openssl rand -base64 741 > /var/mongodb/pki/m103-keyfile
+
+{Obs.: Deve-se exportar a keyfile para as outras máquinas do node. O Teste está sendo realizado tudo na mesma máquina, por isso é gerado apenas 1x e não necessita exportação}
+
+- Alterar o arquivo /etc/node1.conf (que foi copiado do mongod.conf) e adicionar o diretório da KeyFile junto ao conjunto de Security.
+
+security:
+  authorization: enabled
+  keyFile: /var/mongodb/pki/m103-keyfile
+
+- Alterar a porta para: port: 27011
+  
+- Dar permissão ao diretório criado para READ na key criada
+
+chown vagrant:vagrant /var/mongodb/pki/
+chmod 600 /var/mongodb/pki/m103-keyfile
+
+- Alterar novamente o arquivo /etc/node1.conf (que foi copiado do mongod.conf) e adicionar ao conjunto de replication:
+
+replication:
+  replSetName: m103-example
+
+- instancia o mongod utilizando node1.conf. {Copiar a configuração do node1.conf para o node2.conf e node3.conf}
+
+mongod -f /etc/node1.conf --fork
+
+
+- Alterar os arquivos node2.conf e node3.conf e subir os 2 novos nodes.
+
+ Alterar o diretório do dbPath: /var/mongodb/db/node2
+ Alterar o diretório do SystemLog: /var/mongodb/db/node2/mongod.log
+ Alterar a porta utilizada: node2: 27012 e node3: 27013
+
+mongod -f /etc/node2.conf --fork
+mongod -f /etc/node3.conf --fork
+
+- Acessar o node1 e iniciar o replicaset.
+
+mongo --port 27011   {node1}
+rs.initiate()    {obs.: Executar em apenas um dos nodes do ReplicaSet}
+
+- criar um usuario com permissão root e logar com ele acessando o replicaset
+
+use admin
+db.createUser({
+  user: "m103-admin",
+  pwd: "m103-pass",
+  roles: [
+    {role: "root", db: "admin"}
+  ]
+})
+
+mongo --host "m103-example/192.168.103.100:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase admin
+
+{Modelo: --host "<replicasetName>/<HostMachine>:<port>"}
+
+-- Adicionar os nodes criados no replicaset
+
+rs.add("192.168.103.100:27012")
+rs.add("192.168.103.100:27013")
+
+-- Derruba o current primary
+
+rs.stepDown()
+
+{Obs.: Quando derrubamos o current primary uma eleição é forçada e os nodes elegem um novo primary}
+
+rs.isMaster()
+
+
+############################################################################################################ 
+										Replication Configuration Document
+############################################################################################################
+
+- Retorna documento com a configuração corrente do replicaset
+
+rs.conf()
+
+Quando um Node do ReplicaSet tiver a Opção: SlaveDelay <> 0, representa que o node é atualizado com um 'lag' e algumas configurações são obrigatórios:
+
+priority: 0  (O node nunca pode se tornar elegivel em um failover)
+
+e por boas práticas: hidden: True (Evitando assim consultas em nodes com informações atrasadas)
+
+############################################################################################################ 
+												Replication Commands
+############################################################################################################ 
+
+rs.status() 
+
+	* Retorna a situação dos nodes do replicaset
+	
+		heartbeatIntervalMillis: X Tempo/Tempo (MS) em que o primary se comunica com os Secondaries.
+	
+		lastHeartbeat: Ultima vez em que o NODE recebeu um heartbeat do Primary node.
+		lasHeartbeatRecv: Ultima vez que o primary recebe um heartbeat desse node.
+
+rs.isMaster()
+
+	* Retorna informações sobre o node que está executando o comando. (um resumo do rs.status())
+	
+db.serverStatus()['repl']
+
+	* Muito parecido com rs.isMaster(), retorna informações do replicaset.
+	* A grande diferença e importancia está no final do resultado, um campo chamado: 
+		rbid -> Que representa(count) se a instancia mongod sofreu algum rollback.
+
+rs.printReplicationInfo()
+
+	* Retorna informações refernte ao OpLog relacionado ao nó atual.
+
+############################################################################################################ 
+												Local DB
+############################################################################################################
+	
+- Acessar mongodb em modo Standalone (Sem replicaset) 
+{Obs.: O ambiente montado até aqui foi com replicaset, para acessar Standalone, deve-se criar um novo diretório de path e subir a nova instancia apontando para esse diretório}
+
+mkdir allbymyselfdb
+
+mongod --dbpath allbymyselfdb
+
+mongo
+
+show dbs
+
+use local
+show collections
+
+Só irá existir uma única collection startup_logs que grada os logs de inicio do "node" em questão, (Standalone)
+
+- Acessando o mongodb com replicaset (Subir os mongod )
+
+mongo --host "m103-example/192.168.103.100:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase admin
+
+use local
+show collections
+
+oplog.rs
+	
+	* Ponto central do mecanismo de replicação
+	* Todos os dados que deverão ser replicados no replicaset são logados dentro desse documento.
+	
+db.oplog.rs.findOne()
+		
+	* Retorna informações sobre o oplog
+	* oplog irá crescer até o tamanho pré-configurado antes de começar a sobrescrever registros antigos. (Capped collection)
+	* Em um replicaset de 3 nodes,se um node ficar offline por bastante tempo e o arquivo oplog for sobrescrito, quando o node ficar online novamente, ele ficará com status: Recovery Mode, sendo necessário atualizar o node manualmente.
+	
+	- atribuir o stats do oplog.rs dentro de uma variavel para consultas.
+	
+		var stats = db.oplog.rs.stats()
+		stats.capped {True = Representa uma Capped Collection}
+		stats.size
+		stats.maxSize
+	
+	* oplog por default aloca 5% do espaço em disco
+		
+rs.printReplicationInfo()	
+
+############################################################################################################ 
+												Reconfiguring a Running Replica Set
+############################################################################################################
+
+- Adicionar 2 novos Nodes:
+
+mkdir -p /var/mongodb/db/node4
+mkdir -p /var/mongodb/db/arbiter
+
+- Criar 2 novos arquivos .conf (Copiar dos existentes e ajustar os arquivos):
+
+cp /etc/node1.conf /etc/node4.conf
+cp /etc/node1.conf /etc/arbiter.conf
+
+node4.conf:  port 27014
+arbiter.conf: port: 28000
+
+- Subir o serviço dos nodes criados:
+
+mongod -f /etc/node4.conf
+mongod -f /etc/arbiter.conf
+
+- Adicionar os 2 novos nodes no Cluster:
+
+rs.add("192.168.103.100:27014")
+rs.addArb("192.168.103.100:28000")
+
+- Remover o arbiter node:
+
+rs.remove("192.168.103.100:28000")
+
+- Reconfigurar os nodes que sobraram: {Colocar o node como Hidden, sem votar e que não pode se tornar elegivel para primary}
+
+	* Verificar configurações atuais do cluster:
+	
+		rs.conf()
+	
+	* Atribuir as configurações para variavel para edição:
+	
+		cfg.rs.conf()
+	
+	* Alterar as configurações do node id = 3 (ultimo node adicionado):
+	
+		- Altera a configuração para o node não votar: 
+			cfg.members[3].votes = 0
+			
+		- Altera a configuração para o node não ser visto pela aplicação: 
+			cfg.members[3].hidden = true
+			
+		- Altera a configuração para o node nunca se tornar primary:
+			cfg.members[3].priority = 0
+	
+	* Aplica as configurações alteradas:
+	
+		rs.reconfig(cfg)
+		rs.conf()
+
+############################################################################################################ 
+									Reads and Writes on a Replica Set
+############################################################################################################
+
+- Conectar ao replica set
+
+mongo --host "m103-example/192.168.103.100:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+- Insere um documento dentro de uma nova collection
+
+use newDB
+db.new_collection.insert ({"student": "Matt Javaly", "grade": "A+"})
+
+- Trocar a conexão e acessar um secondary node diretamente
+
+exit
+mongo --host "192.168.103.100:27012" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+*Obs.: Ao acessar um secondary node diretamente, não é informado o nome do replicaset como no acesso anterior, pois por default será redirecionado ao primary node.
+
+- Para ser possível acessar os bd e collections é necessário habilitar reads no secondary node.
+
+show dbs
+rs.slaveOK()
+show dbs.
+
+- Realizando leituras no secondary node.
+
+use newDB
+db.new_collection.find()
+
+- Derrubar os 2 secondary nodes (acessar os 2)
+
+use admin
+db.shutdownServer()
+
+- Conectar diretamente ao node que está online
+
+mongo --host "m103-example/192.168.103.100:27011" -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+rs.isMaster()
+
+Obs.: o node está como secondary pois a maioria dos nodes que "podem ser eleitos primary" estão offline.
+
+############################################################################################################ 
+										Failovers and Elections
+############################################################################################################
+
+- Alterando a configuração priority para 0 (node não pode se tornar elegivel) de um dos nodes:
+
+cfg = rs.conf()
+
+cf.members[2].priority = 0
+
+rs.reconfig(cfg)
+
+- Chegando a nova topologia de configuração
+
+rs.isMaster()
+
+- Forçando uma eleição dentro de um replica set
+
+rs.stepDown()
+
+- Chegando a topologia após a eleição:
+
+rs.isMaster()
+
+############################################################################################################ 
+										Write Concern
+############################################################################################################
+
+Write Concern : Representa o número de nodes que deve ser propagado a operação para retornar OK no request.
+
+Obs.: o WriteResult simplesmente nos diz se o write concern foi respeitado ou não, ele não deixa de comitar um instrução caso o write concern não seja respeitado. Quando nodes unhealthy estiverem online novamente, eles serão sincronizados e terão os dados inseridos.
+	
+
+Write Concern Levels:
+
+ 0 - Não aguarda ack do replica-set, a aplicação não se importa se a operação deu certo ou falhou.
+ 
+ 1 - (Default) Aguarda o ack do primary node do replica-set.
+ 
+ >= 2 - Aguarda o ack do primary node e um ou mais secondaries nodes.
+ 
+ "majority" - Aguarda o ack da maioria dos nodes do replica set. (Total de nodes/2 = majority)
+ 
+	* Vantagem do majority é que se o cluster crescer, não é necessário alterar a configuração de write concern para garantir escrita salva na maioria dos nodes, porém, se o cluster crescer muito, as operações podem se tornar lentas.
+
+Write Concern Options:
+
+	wtimeout : Tempo de espera limite para obter os acks do write concern antes de considerar que a operação falhou.
+	
+	j (journal) : Quando configurado como true, garante que as operações foram escritas em disco e não apenas na memória antes de retornar o ack de ok.
+	
+
+############################################################################################################ 
+										Read Concern
+############################################################################################################
+
+Read Concern : Representa que só serão retornados dados cujo o readconcern tenha sido respeitado, ou seja, os dados existem em X nodes.
+
+Read Concern Levels:
+
+Local : retorna o dado mais atual do replica set, Não há garantia.
+
+Available : 
+
+Majority : retorna os dados que estão escritos na maioria dos nodes.
+
+Linearizable : 
+
+
+Qual Read Concern Utilizar?
+
+Latest data: Local ou available, porém sem garantia de durabilidade
+
+Fast ou Safe: Majority
+
+Safe ou Latest: Linearizable, pórem podem ser mais lentos que outros read concern. Single document reads only.
+
+############################################################################################################ 
+										Read Preference
+############################################################################################################
+
+Permite a aplicação realizar leituras de qualquer node do replica set.
+
+Read Preference Modes:
+
+	* Primary (default) : A aplicação realiza a leitura do primary node.
+
+	* PrimaryPreferred : A aplicação tenta realizar a leitura do primary node, caso o node esteja indisponivel, ele realiza a leitura a partir de secondaries nodes.
+
+	* Secondary : A aplicação realiza leituras somente de secondaries nodes.
+
+	* SecondaryPreferred : Realiza leituras a partir se secondary nodes, caso os nodes esteja indisponivel, realiza a leitura no primary.
+
+	* nearest : Realiza a leitura sobre nodes com menor latência.
+
+
+##########################################################################################################################################################################
+														MongoDB - Cluster Administration  - Week 3 {Sharding}
+##########################################################################################################################################################################
+
+Sharding Architecture
+
+	Quando a aplicação faz um request de um determinado dado, o mongoS é responsável por gerenciar e identificar em qual Shard o dado se encontra e encaminhar o request para ele.
+	
+	Como o mongoS sabe em qual shard a informação se encontra?
+		Através dos servidores (replica set para garantir disponibilidade) de Config Servers que possuem os metadados salvos com as informações de qual dado está em qual shard.
+
+	Se um request for realizado sem utilizar a chave shardeada, o mongoS irá realizar a consulta em todos Shards e o mongoS será responsável por executar o merge antes de entrar a aplicação que fez o request.
+		
+	
+	primary shard - shard onde todas as collections "não Shardeados" são mantidas. Cada database possui sua própria primary shard. 
+
+
+############################################################################################################ 
+										Setting up Sharded Cluster
+############################################################################################################
+
+A. Configuração com replication dos arquivos Config Servers (csrs)
+
+1. Criar os arquivos de Configuração responsavel pelo Config Servers.
+
+* Copiar as configurações dos arquivos existentes {/etc/node1.conf...}:
+
+cp /etc/node1.conf /etc/csrs_1.conf  {port: 26001}
+cp /etc/node1.conf /etc/csrs_2.conf  {port: 26002}
+cp /etc/node1.conf /etc/csrs_3.conf  {port: 26003}
+
+* Criar o diretório onde esses arquivos serão salvos:
+
+mkdir -p /var/log/mongodb/db/csrs1
+mkdir -p /var/log/mongodb/db/csrs2
+mkdir -p /var/log/mongodb/db/csrs3
+
+---------------------------------------------------------------------------------------------------------
+**** Modelo de como os arquivos csrs.conf devem ser ****
+
+Obs de Alterações necessárias após a cópia do node1.conf : 
+
+	* Alterar o diretório do Storage para o diretório criado.
+	* Alterar o nome do arquivo .log do systemLog.
+	* Alterar a porta da interface de rede.
+	* Alterar o nome do repSetName.
+	* Adicionar a propriedade sharding e a opção clusterRole
+	
+
+# csrs_1.conf
+
+# for documentation of all options, see:
+#   http://docs.mongodb.org/manual/reference/configuration-options/
+
+# Where and how to store data.
+storage:
+  dbPath: /var/mongodb/db/csrs1
+
+# where to write logging data.
+systemLog:
+  destination: file
+  logAppend: true
+  path: /var/mongodb/db/csrs1.log
+
+# network interfaces
+net:
+  port: 26001
+  bindIp: "127.0.0.1,192.168.103.100"
+
+# how the process runs
+processManagement:
+  timeZoneInfo: /usr/share/zoneinfo
+
+replication:
+  replSetName: m103-csrs
+
+sharding:
+  clusterRole: configsvr
+
+security:
+  authorization: enabled
+  keyFile: /var/mongodb/pki/m103-keyfile
+
+---------------------------------------------------------------------------------------------------------
+
+2. Após todas as configurações, iniciar os serviços de config Server (csrs):
+
+mongod -f csrs_1.conf --fork
+mongod -f csrs_2.conf --fork
+mongod -f csrs_3.conf --fork
+
+{
+mongod -f /etc/node1.conf --fork
+mongod -f /etc/node2.conf --fork
+mongod -f /etc/node3.conf --fork
+mongod -f /etc/node4.conf --fork
+mongod -f /etc/node5.conf --fork
+mongod -f /etc/node6.conf --fork
+
+mongos -f /etc/mongos2.conf --fork
+}
+
+3. Conectar a um dos conf servers criados e iniciar a replicação:
+
+mongo --port 26001
+
+rs.initiate()
+
+4. Criar um super usuário sobre o CSRS:
+
+use admin
+db.createUser({
+  user: "m103-admin",
+  pwd: "m103-pass",
+  roles: [
+    {role: "root", db: "admin"}
+  ]
+})
+
+* Autenticação como super usuário depois de logado:
+
+db.auth("m103-admin", "m103-pass")
+
+5. Adicionar os 2 novos nodes do csrs criados:
+
+rs.add("192.168.103.100:26002")
+rs.add("192.168.103.100:26003")
+
+rs.isMaster()
+
+B. Configuração do arquivo do mongos
+
+1. Criar os arquivos de Configuração responsavel pelo mongos.
+
+* Copiar as configurações dos arquivos existentes {/etc/node1.conf...}:
+
+cp /etc/node1.conf /etc/mongos.conf  {port: 26000}
+
+---------------------------------------------------------------------------------------------------------
+**** Modelo de como o arquivo mongos.conf devem ser ****
+
+Obs de Alterações necessárias após a cópia do node1.conf : 
+
+	* Alterar o nome do arquivo .log do systemLog.
+	* Alterar a porta da interface de rede.
+	* Adicionar a propriedade sharding e a opção configDB. {Deve se especificados os nodes do csrs criados anteriormente que irá dizer de onde o mongos deve ler as informações de configuração}
+	
+##
+# mongos.conf
+
+# for documentation of all options, see:
+#   http://docs.mongodb.org/manual/reference/configuration-options/
+
+# where to write logging data.
+systemLog:
+  destination: file
+  logAppend: true
+  path: /var/mongodb/db/mongos.log
+
+# network interfaces
+net:
+  port: 26000
+  bindIp: "127.0.0.1,192.168.103.100"
+
+# how the process runs
+processManagement:
+  timeZoneInfo: /usr/share/zoneinfo
+
+sharding:
+  configDB: m103-csrs/192.168.103.100:26001,192.168.103.100:26002,192.168.103.100:26003
+
+security:
+  keyFile: /var/mongodb/pki/m103-keyfile
+##
+
+
+2. Iniciando o serviço do mongos:
+
+mongos -f /etc/mongos.conf --fork
+
+
+3. Conectar ao mongos e chegar o status do sharding
+
+mongo --port 26000 -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+sh.status()
+
+4. Alterar os arquivos de configurações dos node.conf para que se tornem shards.
+
+---------------------------------------------------------------------------------------------------------
+**** Modelo de como os arquivos nodes.conf devem ser ****
+
+	* Acrescentar a informação de sharding e informar o nome do clusterRole
+	* Remover a autenticação do Security
+
+##
+
+# mongod.conf
+
+# for documentation of all options, see:
+#   http://docs.mongodb.org/manual/reference/configuration-options/
+
+# Where and how to store data.
+storage:
+  dbPath: /var/mongodb/db/node1
+  journal:
+    enabled: true
+#  engine:
+#  mmapv1:
+# Essa configuração só foi necessária por estar usando vagrant e ter limitação 2gb. Prod não precisa do limitador
+  wiredTiger:
+    engineConfig:
+      cacheSizeGB: .1
+
+# where to write logging data.
+systemLog:
+  destination: file
+  logAppend: true
+  path: /var/mongodb/db/node1/mongod.log
+
+# network interfaces
+net:
+  port: 27011
+  bindIp: "127.0.0.1,192.168.103.100"
+
+# profiling queries takes longer than x values
+operationProfiling:
+  slowOpThresholdMs: 50
+
+# how the process runs
+processManagement:
+  timeZoneInfo: /usr/share/zoneinfo
+
+replication:
+  replSetName: m103-example
+
+sharding:
+  clusterRole: shardsvr
+
+security:
+  authorization: enabled
+##
+---------------------------------------------------------------------------------------------------------
+
+5. Acessar os secondaries nodes para derrubar e subir novamente com as configurações alteradas no passo 4.
+
+mongo --port 27012 -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+use admin
+db.shutdownServer()
+
+mongod -f /etc/node2.conf
+
+
+mongo --port 27013 -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+use admin
+db.shutdownServer()
+
+mongod -f /etc/node3.conf
+
+
+6. Acessar o primary node diretamente forçando uma eleição para que ele se torne secondary e possa ser derrubado o serviço
+
+mongo --port 27011 -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+rs.stepDown()
+
+use admin
+db.shutdownServer()
+
+mongod -f /etc/node1.conf
+
+
+7. Conectar no mongos para adicionar o shard
+
+mongo --port 26000 -u "m103-admin" -p "m103-pass" --authenticationDatabase "admin"
+
+sh.addShard("m103-example/192.168.103.100:27012")
+* Ao informar 1 dos nodes, todos os nodes são automaticamente identificados devido a configuração feita no passo 1.
+
+sh.status()
+
+
+############################################################################################################ 
+												Config DB
+############################################################################################################
+
+Utilizado internamente pelo mongodb, nunca escrever dados sobre ele.
+
+todos dados retornados quando se executa um sh.status() a partir do mongos, são armazenados dentro do config db.
+
+
+use config
+show collections
+
+- Retorna cada db em cluster informando se possui shard enable.
+
+db.databases.find().pretty()
+
+
+- Retorna quais collections estão shardiadas e qual a chave do shard.
+
+db.collections.find().pretty()
+
+
+db.shards.find().pretty()
+
+db.chunk.find().pretty()
+
+- dados sobre o mongos
+
+db.mongos.find().pretty()
+
+
+############################################################################################################ 
+												Shard Keys
+############################################################################################################
+
+Shards são distribuidos em Chunks de dados que determina qual dado está em um determinado shard.
+
+- Shard Keys Field devem ser indexados
+	Deve existir um index sobre os campos que serão utiizados como Shard Key antes.
+	
+- Shard Key são imutaveis
+	Não é possível mudar uma Shard Key após defini-lá.
+	Não é possível alterar os valores da Shark Key após defini-lá.
+	
+- Shard Key are permanent.
+	Não é possível "unshard" um collection shardiada.
+	
+
+				-------------------------------------HOW TO SHARD-------------------------------------
+
+Conectar ao mongos.
+
+
+1. Habilitar sharding para um bd especifico.
+
+	sh.enableSharding("<Database>")
+	
+	* Não é realizado o shard nesse momento, apenas habilita a configuração que collections desse database podem ser shardiados.
+	
+2. 	Criar index para os campos que serão utilizados no Shard Key.
+
+	db.<collection>.createIndex()
+
+3.	Realizar o Shard da collection
+
+	sh.shardCollection("<database.<collection>", { <shard key> })
+
+-------------------------------------------------------------------------------------------
+##	Shard realizado dentro do curso
+
+use m103
+show collections
+sh.enableSharding("m103")
+db.products.createIndex( { "sku" : 1 } )
+sh.shardCollection("m103.products", {"sku" : 1 } )
+
+sh.status()
+
+##
+-------------------------------------------------------------------------------------------
+
+############################################################################################################ 
+										Picking a Good Shard Key
+############################################################################################################
+
+Uma boa chave para ser Shard Key deve ter:
+
+* Alta Cardinalidade
+	Quanto maior a possiblidade de valores unico, melhor é, mais Shards poderemos criar e mais distribuidos os dados ficarão.
+	Quanto melhor distribuidos os dados ficaram, melhor proveito teremos sobre os Shards e Chunks.
+	
+* Baixa frequência
+	pouca repetição dos valores únicos
+	
+* Não Monotonicos
+	Sem alterações de valores linearmente.
+	
+Read Isolation
+
+	Quando é executado uma consulta, se o campo que está Shardiado for informado como filtro, o mongoS através do router, vai encaminhar diretamente a consulta somente para os Chunks que possuem aquela faixa de valores.
+	
+	Sem informar o campo shardiado na consulta, o mongoS teria que bater em todos Shards e todos Chunks para conseguir encontrar o registro.
+
+	
+*
+Good Shard Keys provide even write distribution	
+Where possible, good shard keys provide read isolation
+High Cardinality, Low frequency shard key values ideal
+Avoid monotonically changing shard keys
+Unsharding a collection is hard - avoid it
+
+############################################################################################################ 
+												Hashed Shard Keys
+############################################################################################################
+
+* Os dados ficam mais distribuidos
+* Não sabemos informar em qual Chunk o dado se encontra, pois de acordo com a consulta, irá pegar o hash do id e distribuir.
+
+Considerações:
+	
+	Non-Hashed Shards são faceis de encontrar sobre os shards e chunks.
+	
+	Hashed Shard não suportam isolamento geográfico para operações de leituras utilizando sharding zone.
+	
+	Hashed Shards não podem ser compostos, são compostos apenas pelo hash de um campo apenas.
+		
+	
+
+Exemplo de criar uma Hashed Shard key
+
+sh.enableSharding("<database>")
+db.<collection>.createIndex( { "<field>" : "hashed" } )
+sh.shardCollection("<database>.<collection>", {<shard key field> : "hashed" } )
+
+
+############################################################################################################ 
+						Adicionando um Shard ao Cluster e Shardiando uma Collection
+############################################################################################################
+
+1. Adicionar um Segundo Shard {Criar diretórios, e realizar as operações igual ao criar um primeiro Shard <Setting up Sharded Cluster>}
+
+obs.: O clusterRole deve ser o mesmo do Shard 1.
+
+2. Conectar ao mongos e adicionar o shard secundário criado.
+
+sh.addShard(<repSetName>/<IP:Port_PrimaryNode>)
+
+sh.status()
+
+3. Conectado ao mongoS habilitar sharding para o db.
+
+sh.enableSharding(<database_name>)
+
+4. Escolher o Shard_key da collection e criar um index sobre ele caso não exista.
+
+use <database_name>
+db.<collection>.createIndex({"<shard_key>" : 1 })    --{esse é um modelo, pode ser criado shard key com hash}
+sh.shardCollection("<database>.<collection>", {<shard key field> : 1 } )
+
+
+Shard Criado com Sucesso!
+
+
+############################################################################################################ 
+													Chunks
+############################################################################################################
+
+ChunkSize Default: 64MB
+
+1MB <= ChunkSize <= 1024MB
+
+
+*	Chunks são divisões realizadas dentro de um Shard para otimizar a performance da consulta distribuindo
+	uniformemente dos dados.
+*	A divisão dos Chunks são feitas com base na Shard Key escolhida.
+*	Quanto menor tamanho dos ChunkSize maior número de Chunks serão criados.
+
+
+Como realizar a alteração do ChunkSize:
+
+1. Conectado ao mongoS:
+
+use config
+db.settings.save ({ _id: "chunksize", value: <X> })
+
+sh.status()
+
+** Limitações dos Chunks
+
+Ao ajustar o ChunkSize, os dados só serão redistribuidos durante Inserts/Updates dos dados! O que pode levar tempo para ajustar as novas configurações!
+
+Quando um Shard Key escolhido possui baixa Cardinality, o número de Chunks criados será menor. pois existe uma menor "faixa" de dados para distribuir. Uma shard Key com baixa Cardinality pode resultar em JUMBO CHUNKS.
+
+JUMBO CHUNKS -> São Chunks que ultrapassaram o limite do ChunkSize e não a nada a ser feito devido a Shard Key com baixa Cardinality escolhida!   JUMBO CHUNKS dificilmente poderão ser redistribuidos, existe um limite para redistribuir os dados.
+**Os dados devem poder ser divisiveis pelo tamanho da configuração do ChunkSize!**
+
+
+** Conectado ao mongoS , execute os comandos abaixo para colher informações dos Chunks
+
+use config
+db.chunks.find()
+
+
+############################################################################################################ 
+													Balancing
+############################################################################################################
+
+Utilizado para "re-Distribuir" chunks pelos shards.
+
+Pode ser feito automaticamento (Configurar no primary node do Config Server Replica Set) ou manual.
+
+*obs.: Um chunk pode ser splitado quando re-distribuido entre os shards.
+
+
+- Conectado ao mongoS:
+
+-- Iniciar um balanceamento dos dados manualmente.
+
+sh.startBalancer(<timeout>,<internal)
+
+-- Parar um balanceamento dos dados manualmente.
+
+sh.stopBalancer(<timeout>,<internal)
+
+Obs.: Se o Stop for executado no meio de um balanceamento, o balanceamento irá finalizar antes de parar.
+
+-- Habilitar ou desabilitar o balanceamento.
+
+sh.setBalancerSate(boolean)
+
+-- Retorna o status do balanceamento, se ésta habilitadd ou desabilitado.
+
+sh.getBalancerState()
+
+
+############################################################################################################ 
+										Queries in a Sharded Cluster
+############################################################################################################
+
+Quando uma consulta é executada informando a Shard Key, a consulta vai direto no Shard que possui aquela chave.
+
+Quando uma consulta é executada e não é informado a Shard Key, o mongos é responsável por fazer a consulta em cada um dos Shards, retornando os dados encontrados. Dentro do mongos é realizado um merge dos dados antes de retornar para a aplicação.
+
+	Ao executar consultas com .Sort(), .Limit() entre outros agregadores sem informar a Shard Key, cada Shard irá realizar sua consulta com a agregação, retornar para o mongos que irá dar um merge nos dados, aplicar as operações de .Sort() .Limit() novamente, e retornar para a aplicação!
+
+
+Consultas quando a Shard Key possui + de um campo:
+
+Consultas que serão direcionadas diretamente ao Shard responsável:
+
+Regra: A consulta sobre Shark Key com + de 1 campo, Não é possivel passar o segundo campo na busca sem informar o primeiro (dessa forma a consulta não vai usar a Shard Key e vai varrer todos Shards).
+
+Shard Key Example: { "sku" : 1, "type": 1, "name" : 1}
+
+- Targetable Queries:
+
+	<database>.<collection>.find( { "sku" : ...}) 
+	<database>.<collection>.find( { "sku" : ..., "type" : ... }) 
+	<database>.<collection>.find( { "sku" : ..., "type" : ..., "name" : ... })
+
+	As consultas acima estão aptas em relizar a consulta utilizando a Shard Key.
+
+
+- Scatter-Gather Queries:
+
+	<database>.<collection>.find( { "type" : ...}) 
+	<database>.<collection>.find( { "name" : ...}) 
+ 
+
+- Consulta para retornar oque o mongo fez e como foi a consulta. Se foi executada sobre um shard apenas, se teve que dar merger ...
+
+Exemplo:
+
+conectado ao mongos execute:
+
+use m103
+show collections
+
+db.products.find({"sku" : 1000000749 }).explain()
+db.products.find( { "name" : "Gods And Heroes: Rome Rising - Windows [Digital Download]" } ).explain()
+ 
+
+ 
+	
+
+
+
+
+
+

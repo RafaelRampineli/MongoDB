@@ -1,0 +1,309 @@
+ MongoDB Shell connect Linux
+ 
+ 1. INCLUIR O DIRETÓRIO DO MONGODB NO ARQUIVO DENTRO DE Home/<userName>/.bash_profile  para facilitar o acesso.
+	Se o arquivo não existir, criar ele =  sudo nano .bash_profile  (executar o comando dentro do home/<userName>)
+	
+	Incluir: export PATH="~/mongodb-linux-x86_64-enterprise-ubuntu1604-3.6.5/bin:$PATH"   ( O $PATH no final é para ele reconhecer todos os outros caminhos já incluidos tb)
+	
+	source ./.bash_profile
+	
+	echo $PATH
+	
+2.  conectar no mongodb:  exemplo de conexão dentro de um cluster : 
+
+mongo "mongodb://cluster0-shard-00-00-jxeqq.mongodb.net:27017,cluster0-shard-00-01-jxeqq.mongodb.net:27017,cluster0-shard-00-02-jxeqq.mongodb.net:27017/test?replicaSet=Cluster0-shard-0" --authenticationDatabase admin --ssl --username m001-student --password m001-mongodb-basics
+
+ou
+
+mongo "mongodb+srv://sandbox-tfosw.mongodb.net/test" --username m001-student --password m001-mongodb-basics
+mongo "mongodb://sandbox-shard-00-00-tfosw.mongodb.net:27017,sandbox-shard-00-01-tfosw.mongodb.net:27017,sandbox-shard-00-02-tfosw.mongodb.net:27017/test?replicaSet=SANDBOX-shard-0" --ssl --authenticationDatabase admin --username m001-student --password <PASSWORD>
+
+mongo --nodb
+	
+	
+3. Para carregar dados js dentro do mongo, acessar o diretorio do arquivo e fazer a conexao no db (como item 2).
+load("<nomearquivo.js>")
+
+show dbs -> mostra todos db
+use <namename>
+show collections 
+db.movieDetails.find().pretty()  -> mostra os dados da collections movieDetails.
+
+
+4. Filtro exemplo para utilizar no MongoDB Compass
+{Field: "Value"} -> {genres: "Comedy"}
+
+
+5. InsertOne registro MongoDB Shell Exemplo:
+
+db.moviesScratch.insertOne(title: "Star Trek II: The wrath of Khan", year: 1982, imdb: "tt0084726"})  -> _id gerado automaticamente pelo mongodb
+db.moviesScratch.insertOne(_id: "tt0084726", title: "Star Trek II: The wrath of Khan", year: 1982, imdb: "tt0084726"})  -> _id informado no insert.
+
+db -> representa o database atual... (digitar apenas db vai retornar o banco logado)
+
+<db>.<collection_desejainserir>.<Command>
+
+
+InsertOne => Insere apenas 1 registro por vez no mongo.
+ 
+
+6. InsertMany
+
+db.moviesScratch.insertMany(
+    [
+        {
+  	    "_id" : "tt0084726",
+  	    "title" : "Star Trek II: The Wrath of Khan",
+  	    "year" : 1982,
+  	    "type" : "movie"
+          },
+          {
+  	    "_id" : "tt0796366",
+  	    "title" : "Star Trek",
+  	    "year" : 2009,
+  	    "type" : "movie"
+          },
+          {
+  	    "_id" : "tt0084726",
+  	    "title" : "Star Trek II: The Wrath of Khan",
+  	    "year" : 1982,
+  	    "type" : "movie"
+          },
+          {
+  	    "_id" : "tt1408101",
+  	    "title" : "Star Trek Into Darkness",
+  	    "year" : 2013,
+  	    "type" : "movie"
+          },
+          {
+  	    "_id" : "tt0117731",
+  	    "title" : "Star Trek: First Contact",
+  	    "year" : 1996,
+  	    "type" : "movie"
+        }
+    ],
+    {
+        "ordered": false 
+    }
+);
+
+Insere varios documentos de uma só fez
+
+ordered = True (Default) = representa que o insert irá parar se encontrar um erro.
+		  False = representa que se encontrar um erro, ainda sim continuará a execução e irá inserir registros após o erro
+
+7. Filtro de documentos
+
+db.movies.find({mpaaRating: "PG-13", year: 2009}).pretty()  
+Retorna documento com 2 filtros: mpaaRating e year
+
+Filtro com Dot notation é obrigatorio o campo filtrado vir entre "" como abaixo
+db.data.find({"wind.direction.angle": 290}).pretty()
+
+db.movieDetails.find({"awards.wins": 2, "awards.nominations": 2}).pretty()
+
+Dot notation = filtro sobre obj do documento, que possui obj e etc... = filtro aninhado  (nome do campo sempre em parenteses)
+ 
+8. Filtro Valores exatos em Array
+
+db.movies.find({cast: ["Jeff Bridges", "Tim Robbins"]}).pretty()
+Retorna apenas documentos que tenham  Jeff Bridges e Tim Robbins EXATOS no filtro. o array deve ser igual ao filtro
+
+db.movies.find({cast: "Jeff Bridges"}).pretty()
+Retorna todos documentos onde a String apareça em qualquer campo do array Cast.
+
+db.movies.find({"cast.0": "Jeff Bridges"}).pretty()
+retorna somente documentos onde Jeff Bridges ocupa a primeira posição do Array.
+
+9. Projection - Limitar as campos do documento a ser retornado
+
+db.movies.find({genre: "Action, Adventure"}, {title: 1, _id: 0})
+Recupera dados que possuem genre de Action ou Adventure, retornando somente o title.
+1: Mostra o campo
+0: Oculta o campo
+
+Por default _id é retornado.
+
+10. UpdateOne command
+
+db.movieDetails.updateOne
+	(
+		{
+		title: "The Martian"
+		}, 
+		{
+		$set: 
+			{
+			poster: "Poster Edited"
+			}
+		}
+	)
+
+UpdateOne atualiza somente o primeiro registro que encontrar. Se existir vários documentos, somente o primeiro será atualizado
+
+Primeiro campo é o WHERE do registro que deseja alterar: {title: "The Martian"}
+Segundo campo são os valores a serem alterados. Operador $set é responsavel pelo update.
+
+Se o campo a ser atualizado já existir, atualiza o registro, caso contrário cria o campo dentro do documento.
+
+db.movieDetails.updateOne(
+	{
+		title: "The Martian"
+	}, 
+	{	$set: 
+		{	"awards":
+			{	"wins": 8, 
+				"nominations": 14,
+				"text":"test Update Document"
+			}
+		}
+	}
+);
+
+11. UpdateMany - Atualizacao de varios registros ao mesmo tempo
+
+db.movieDetails.updateMany(
+	{
+		rated: null
+	}, 
+	{	
+		$unset: 
+			{
+			rated:""
+			}
+	}
+)
+
+Operador $unset = remove o campo do documento.
+
+12. UpSert - Se não existe o documento, insere. Se existir atualiza.
+
+db.movieDetails.updateOne(
+	{
+		title: "The Martian"
+	}, 
+	{	$set: 
+		{	"awards":
+			{	"wins": 8, 
+				"nominations": 14,
+				"text":"test Update Document"
+			}
+		}
+	},
+	{
+		upsert: true
+	}
+);
+
+https://docs.mongodb.com/manual/reference/operator/update/
+
+13. ReplaceOne - ao invés de dar update em todos os campos do documento, substitui o arquivo por outro
+
+14. DeleteOne e DeleteMany
+
+db.reviews.deleteOne({_id: ObjectId("5b060aa64e3ed6cf55c8a353")})
+db.reviews.deleteMany({reviewer_id: 759723314})
+
+
+15. Operadores
+
+db.movieDetails.find (
+	{
+		runtime: 
+		{
+			$gt: 110, 
+			$lt: 120
+		}
+	}, 
+	{	_id: 0, 
+		title: 1, 
+		runtime: 1
+	}
+)
+
+db.movieDetails.find({runtime: {$gte: 180}, "tomato.meter":{$gte: 95}}, {_id: 0, title: 1, runtime: 1})
+
+$gt = greater than...Maior que  ($gte = greater than equals)
+$lt = less than...Menor que ($lte = less than equals)
+
+db.movieDetails.find({rated: {$ne: "UNRATED"}}, {_id: 0, title: 1, runtime: 1})  
+
+$ne = Not Equals (também retorna documentos que não possuem o campo dentro do documento)
+
+db.movieDetails.find({rated: {$in: ["G","PG"]}}, {_id: 0, title: 1, runtime: 1, rated: 1})
+
+$in = retorna documentos cujo o campo Rated tenha valores entre os informados.
+
+db.movies.find(
+	{
+		mpaaRating: 
+		{
+			$exists: false
+		}
+	}
+).pretty()
+
+
+db.data.find({atmosphericPressureChange: {$exists: false}}).count()
+
+$exists = retorna documentos que possuem ou não o Field dentro do documento.
+
+db.movies.find(
+	{
+		viewerRating: 
+		{
+			$type: "int"
+		}
+	}
+).pretty()
+
+$type = retorna somente documentos que possuem valores no field do tipo informado.
+
+
+16. Logical Operators
+
+db.movieDetails.find({$or: [{"tomato.meter": {$gt: 95}},                               
+                            {"metacritic": {$gt: 88}}]},
+                     {_id: 0, title: 1, "tomato.meter": 1, "metacritic": 1})
+
+db.movieDetails.find({$and: [{"tomato.meter": {$gt: 95}},                               
+                            {"metacritic": {$gt: 88}}]},
+                     {_id: 0, title: 1, "tomato.meter": 1, "metacritic": 1})
+
+db.shipwrecks.find({$or: [{watlev: "always dry"}, 
+						  {depth: 0}]})
+					.count()
+----
+db.movieDetails.find(
+		{genres: 
+			{$all: ["Comedy", "Crime"]}
+		}, 
+		{_id: 0, title: 1, genres: 1}).pretty()
+
+db.data.find(
+		{sections: 
+			{$all: ["AG1","MD1","OA1"]}
+		})
+		.count()
+		
+$all = retorna documentos que tenha todos os registros informados no campo especificado. (Podem haver mais, porém os especificados devem contem ambos no campo).
+
+----
+
+db.data.find({sections: {$size: 2}}).count()
+
+$asize = retorna documentos que possuem um array de tamanho X.
+
+--
+db.surveys.find(    { results: { $elemMatch: { product: "abc", score: 7 } } } ).count()
+
+$elemMatch = recupera documentos onde a informaçao de um campo do array corresponda a todos os critérios da consulta especificada
+
+
+ ---
+
+ Retorna valores distintos de um campo no documento
+ 
+db.trips.distinct("usertype")
+ 
+	
