@@ -1,0 +1,3 @@
+Ao iniciar o Mongo utilizar a opção --directoryperdb para que cada db seja salvo dentro de uma pasta. Desse modo, os arquivos das Collections e dos Indexs permanecem mais organizados.
+$ mongod --dbpath /data/db --fork --logpath /data/db/mongodb.log --directoryperdb
+
