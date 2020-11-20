@@ -1,4 +1,4 @@
-Ao iniciar o Mongo utilizar a opção --directoryperdb para que cada db seja salvo dentro de uma pasta. Desse modo, os arquivos das Collections e dos Indexs permanecem mais organizados.
-$ mongod --dbpath /data/db --fork --logpath /data/db/mongodb.log --directoryperdb
+Ao iniciar o Mongo utilizar a opção --directoryperdb e --wiredTigerDirectoryForIndexes para que cada db seja salvo dentro de um diretório e dentro desse diretório terá 2 diretórios: Collection e Indexes devido a opção wiredTigerDirectoryForIndexes. Desse modo, os arquivos das Collections e dos Indexs permanecem mais organizados.
+$ mongod --dbpath /data/db --fork --logpath /data/db/mongodb.log --directoryperdb --wiredTigerDirectoryForIndexes
 
  
